@@ -1,0 +1,137 @@
+setwd('C:/Users/User/Documents/MSPA/PREDICT_422/week_6')
+bank<-read.table(file='bank.txt', header=T, sep=';')
+fix(bank)
+dim(bank)
+str(bank)
+summary(bank)
+attach(bank)
+###detachign bank
+detach(bank)
+
+plot(job)
+plot(marital)
+plot(education)
+plot(default)
+plot(housing)
+plot(loan)
+plot(contact)
+plot(month)
+plot(day)
+plot(poutcome)
+plot(response)
+
+library(ISLR)
+names(bank)
+
+#building logistic regression model. output is logit
+glm.fit=glm(response~.,data=bank,family=binomial)
+summary(glm.fit)
+
+#type="response" tells R to output
+#probabilities instead of logits
+glm.probs=predict(glm.fit,type="response")
+glm.probs[1:10]
+
+#converting probabilities to yes.no values
+glm.pred=rep("no",4521)
+glm.pred[glm.probs>.5]="yes"
+
+#creating a table to produce a confusion matrix
+#to determine how many observations were correcly/incorrectly
+#classified. The diagonals yield correct predictions.
+table(glm.pred,response)
+
+(3914+178)/4521
+mean(glm.pred==response)
+#91% accurate. Both lines above produce same result
+
+#however, this is using the entire data set as training
+#data and is likely overly optomistic. Next, I perform the same test
+#but split the data into a training and testing data
+#sets, so I build the model on training data and
+#test it on the test data
+
+###data split with sanity checks
+set.seed(2)
+train=sample(1:nrow(bank),3521)
+#testing sets
+bank.test=bank[-train,]
+response.test=response[-train]
+dim(bank.test)
+str(bank.test)
+#training sets
+bank.train=bank[train,]
+dim(bank.train)
+
+
+#model built on training data
+glm.fitTrain=glm(response~.,data=bank.train,family=binomial)
+summary(glm.fitTrain)
+
+
+#testing model on testing data
+glm.probsTest=predict(glm.fitTrain,bank.test,type="response")
+glm.probsTest[1:10]
+dim(bank.test)
+str(glm.probsTest)
+
+#comparing model predictions to actual values
+glm.predTest=rep("no",1000)
+glm.predTest[glm.probsTest>.5]="yes"
+table(glm.predTest, response.test)
+
+#assessment of classification performance:
+#correct prediction=90%
+(869+31)/1000
+
+###Now for classification tree modeling with with data split
+library(tree)
+tree.bank=tree(response~.,data=bank.train)
+tree.pred=predict(tree.bank, bank.test, type="class")
+
+#classification tree plot***FIX THE TEXT ON THE PLOT
+par("mar")
+par(mar=c(1,1,1,1))
+plot(tree.bank)
+text(tree.bank, pretty=0)
+
+
+#quick sanity check of predictions
+tree.pred[1:10]
+
+#comparing tree classification predictions to actual data
+table(tree.pred, response.test)
+
+#assessment of classification performance:
+#correct prediction=88.6%
+(838+48)/1000
+
+###comparing ROC curves; converting
+#predictor character vector to a numeric vector as required
+library(pROC)
+NumericTreePredictions<-as.numeric(tree.pred)
+table(tree.pred)
+fix(tree.pred)
+table(NumericTreePredictions)
+roc1<-roc(response.test, NumericTreePredictions)
+
+###converting character vector to a factor
+#and then to a numeric vector as requried
+LogisticPredictions<-as.factor(glm.predTest)
+NumericLogisticPredictions<-as.numeric(LP)
+
+#sanity check
+table(NumericLogisticPredictions)
+roc2<-roc(response.test, NumericLogisticPredictions)
+
+#plots of roc curves
+par(mfrow=c(2,1))
+plot(roc2, main="ROC curve of Logistic Regression Predictions (roc2)")
+plot(roc1, main="ROC curve of Tree Classifictation (roc1)")
+
+#comparing area under the curves (AUC) of two roc curves
+roc.test(roc1,roc2)
+
+#comparison of table
+table(tree.pred, response.test)
+table(glm.predTest, response.test)

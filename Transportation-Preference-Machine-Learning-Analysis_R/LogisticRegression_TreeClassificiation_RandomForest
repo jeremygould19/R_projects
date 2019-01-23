@@ -1,0 +1,221 @@
+---
+title: "Assignment6Sydney"
+author: "Jeremy Gould"
+date: "Thursday, February 18, 2016"
+output: html_document
+---
+
+I am starting by setting my working directory, loading the data set, and doing some very simple data exploration.
+
+```{r}
+setwd('C:/Users/User/Documents/MSPA/PREDICT_422/week_7')
+sydney<-read.csv("sydney.csv", header=T)
+library(ISLR)
+str(sydney)
+summary(sydney)
+names(sydney)
+par(mar=c(1,1,1,1))
+par(mfrow=c(2,2))
+```
+Here are plots of the four variables:
+```{r, echo=FALSE}
+with(sydney,(boxplot(cartime, main="Car Time Boxplot")))
+with(sydney,(boxplot(carcost, main="Car Cost Boxplot")))
+with(sydney,(boxplot(traintime, main="Train Time Boxplot")))
+with(sydney,(boxplot(traincost, main="Train Cost Boxplot")))
+with(sydney,(hist(cartime, main="Car Time Histogram")))
+with(sydney,(hist(carcost, main="Car Cost Histogram")))
+with(sydney,(hist(traintime, main="Train Time Histogram")))
+with(sydney,(hist(traincost, main="Train Cost Histogram")))
+```
+Here is a plot of the response variable:
+```{r, echo=FALSE}
+with(sydney,(plot(choice, main="Choice Plot")))
+```
+Logistic regression model on all data (no split)
+```{r}
+library(ISLR)
+glm.fit=glm(choice~.,data=sydney,family=binomial)
+summary(glm.fit)
+
+glm.probs=predict(glm.fit,type="response")
+glm.probs[1:10]
+```
+Converting probabilities to yes/no values
+```{r}
+glm.pred=rep("car",333)
+glm.pred[glm.probs>.5]="train"
+glm.pred[1:10]
+```
+Table of modeled results versus the actual values
+```{r}
+table(glm.pred,sydney$choice)
+```
+Accuracy=82.58%
+```{r}
+(155+120)/333
+```
+
+Model number 1: Logistic Regression using a data split on the data set into training and testing data sets.  I decided to make the training data set 233 values and the testing set 100 values.
+```{r}
+set.seed(123)
+train=sample(1:nrow(sydney),233)
+sydney.test=sydney[-(train),]
+```
+A quick sanity check to ensure the code did what I wanted. The first is the test set, the second is the training set.
+```{r}
+dim(sydney.test)
+str(sydney.test)
+sydney.train=sydney[train,]
+dim(sydney.train)
+```
+Now I am building a logistc regression model on training data
+```{r}
+glm.fitTrain=glm(choice~.,data=sydney.train,family=binomial)
+summary(glm.fitTrain)
+```
+Testing the model on the test set
+```{r}
+glm.probsTest=predict(glm.fitTrain,sydney.test,type="response")
+glm.probsTest[1:10]
+```
+Another quick sanity check
+```{r}
+dim(sydney.test)
+str(glm.probsTest)
+str(glm.predTest)
+str(sydney.test)
+```
+Building another accuracy comparison table
+```{r}
+glm.predTest=rep("car",100)
+glm.predTest[glm.probsTest>.5]="train"
+table(glm.predTest, sydney.test$choice)
+```
+Logistic Regression accuracy=88%
+```{r}
+(49+39)/100
+```
+
+
+
+Model number 2a: Classification tree modeling (no pruning) with with data split
+```{r}
+library(tree)
+tree.sydney=tree(choice~.,data=sydney.train)
+tree.pred=predict(tree.sydney, sydney.test, type="class")
+```
+Plot of tree
+```{r}
+plot(tree.sydney)
+text(tree.sydney, pretty=0)
+```
+Quick sanity check of predictions
+```{r}
+tree.pred[1:10]
+```
+Comparing tree classification predictions to actual data values
+```{r}
+table(tree.pred, sydney.test$choice)
+```
+Assessment of tree classification model performance: correct prediction=84%
+```{r}
+(45+39)/100
+```
+
+
+Model number 2b: Pruning the tree to test if it will lead to better results.
+Results show that a tree with 3 terminal nodes will have lowest
+cross-validation error rate with 54 errors.
+```{r}
+cv.sydney<-cv.tree(tree.sydney,FUN=prune.misclass)
+names(cv.sydney)
+cv.sydney$size
+cv.sydney$dev
+cv.sydney$k
+cv.sydney$method
+```
+Plotting error rate as a function of 'size' and 'k'
+```{r}
+par(mfrow=c(2,1))
+plot(cv.sydney$size,cv.sydney$dev,type="b", main="Prune tree plot of size and cv error")
+plot(cv.sydney$k, cv.sydney$dev,type="b", main="Prune tree plot of cost-complexity parameter and cv error")
+```
+Obtaining the 3-node pruned tree
+```{r}
+prune.sydney<-prune.misclass(tree.sydney,best=3)
+plot(prune.sydney)
+text(prune.sydney, pretty=0)
+```
+Testing pruned tree on test data
+```{r}
+prunetree.pred<-predict(prune.sydney,sydney.test, type="class")
+table(prunetree.pred,sydney.test$choice)
+```
+Assessment of pruned tree predicive accuracy on test data: 84% accurate.
+Results indicate that although the pruned tree did not increase the
+preditive accuracy of tree classification model, it did increase the interpretability by greatly reducing the internal and terminal nodes.
+```{r}
+(45+39)/100
+```
+
+
+Model number three: Building a random forest.  Since I only have 4
+predictor variables, I decided to use an mrty of 2.
+```{r}
+library(randomForest)
+set.seed(234)
+rf.sydney<-randomForest(choice~.,data=sydney.train, mrty=2, importance=TRUE)
+rf.pred<-predict(rf.sydney,sydney.test)
+```
+
+Sanity check
+```{r}
+str(rf.pred)
+table(rf.pred)
+```
+
+Figures for evaluating variable importance
+```{r}
+importance(rf.sydney)
+varImpPlot(rf.sydney)
+```
+
+Assessing accuracy of random forest=85%
+```{r}
+table(rf.pred,sydney.test$choice)
+(49+36)/100
+```
+Sanity check (again...)
+```{r}
+str(rf.pred)
+```
+
+ROC curve assessment of the three models
+```{r}
+library(pROC)
+par(mfrow=c(2,2))
+str(tree.pred)
+NumericTreePredictions<-as.numeric(tree.pred)
+roc1<-roc(sydney.test$choice, NumericTreePredictions)
+plot(roc1, main="Unpruned Tree Classification ROC curve")
+
+NumericPruneTreePredictions<-as.numeric(prunetree.pred)
+roc1b<-roc(sydney.test$choice, NumericPruneTreePredictions)
+plot(roc1b,main="Pruned Tree Classification (3 leaves) ROC curve")
+
+LP<-as.factor(glm.predTest)
+LP<-as.numeric(LP)
+roc2<-roc(sydney.test$choice,LP)
+plot(roc2, main="Logistic regression ROC curve")
+
+NumericRF.Pred<-as.numeric(rf.pred)
+roc3<-roc(sydney.test$choice,NumericRF.Pred)
+plot(roc3, main="Random forest ROC curve")
+```
+
+The resulting AUC of model is as follows:
+roc1a(Tree Classification):83.89%
+roc1b(Pruned Tree Classificaion):83.89%
+roc2(Logistic Regression):87.74%
+roc3(Random Forest):84.62%
